@@ -11,35 +11,6 @@ from args import model_args
 from utils import get_att_pad_mask, get_sinusoid_encoding_table, get_att_autoregressive_mask
 
 
-# 位置编码
-class PostionalEncoding(nn.Module):
-    def __init__(self, args):
-        super().__init__()
-        self.args = args
-        self.max_pe_len = 5000
-        self.pos_table = np.array([self.cal_each_pos(pos)] for pos in range(self.max_pe_len))
-
-    def forward(self, enc_inputs):
-        '''
-
-        :param enc_inputs: token经过nn.Embedding后的表示 [batch_size, N, dim]
-        :return:
-        '''
-        self.pos_table[:, 0::2] = np.sin(self.pos_table[:, 0::2])
-        self.pos_table[:, 1::2] = np.cos(self.pos_table[:, 1::2])
-
-        return enc_inputs + self.pos_table[:enc_inputs.size(0), :]
-
-    def cal_each_pos(self, pos):
-        '''
-        给定pos的位置编码
-        :param pos: batch中的第pos个token
-        :param index: 第pos个token的第index个维度
-        :return:
-        '''
-        return np.array([pos / (np.power(10000, index / self.args.d_model))] for index in range(self.args.d_model))
-
-
 # 缩放点积注意力,之所以把qkv抽取出来写，是让这个函数，不仅可以进行自注意力机制，也能在解码器端进行交叉注意力
 class ScaledDotProductAttention(nn.Module):
     def __init__(self, args):
@@ -254,6 +225,7 @@ class Transformer(nn.Module):
         logits = self.projection(output)
         return logits.view(-1, logits.size(-1)), enc_att, dec_self_att, dec_enc_att
 
+
 def greedy_decoder(model, enc_input, start_symbol):
     """
     For simplicity, a Greedy Decoder is Beam search when K=1. This is necessary for inference as we don't know the
@@ -269,7 +241,8 @@ def greedy_decoder(model, enc_input, start_symbol):
     terminal = False
     next_symbol = start_symbol
     while not terminal:
-        dec_input = torch.cat([dec_input.detach(), torch.tensor([[next_symbol]], dtype=enc_input.dtype).to(dec_input.device)], -1)
+        dec_input = torch.cat(
+            [dec_input.detach(), torch.tensor([[next_symbol]], dtype=enc_input.dtype).to(dec_input.device)], -1)
         dec_outputs, _, _ = model.decoder(dec_input, enc_input, enc_outputs)
         projected = model.projection(dec_outputs)
         prob = projected.squeeze(0).max(dim=-1, keepdim=False)[1]
@@ -279,6 +252,7 @@ def greedy_decoder(model, enc_input, start_symbol):
             terminal = True
         print(next_word)
     return dec_input
+
 
 if __name__ == "__main__":
     # device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
